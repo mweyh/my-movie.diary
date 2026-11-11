@@ -139,37 +139,41 @@
     <script>
         let movies = [];
 
-        // Diese Funktion liest CSV-Dateien korrekt aus, auch wenn Kommas in Anführungszeichen stehen
-        function parseCSVLine(text) {
-            const result = [];
-            let curVal = "";
-            let inQuotes = false;
+        function parseCSV(text) {
+            const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+            if (lines.length === 0) return [];
 
-            for (let i = 0; i < text.length; i++) {
-                const char = text[i];
-                if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === ',' && !inQuotes) {
-                    result.push(curVal.trim());
-                    curVal = "";
-                } else {
-                    curVal += char;
+            const rows = [];
+            for (let line of lines) {
+                const cols = [];
+                let current = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        cols.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
                 }
+                cols.push(current.trim());
+                rows.push(cols);
             }
-            result.push(curVal.trim());
-            return result;
+            return rows;
         }
 
         async function loadCSV() {
             try {
                 const response = await fetch('diary.csv');
-                const data = await response.text();
-                const lines = data.split(/\r?\n/).filter(l => l.trim() !== '');
+                const text = await response.text();
+                const allRows = parseCSV(text);
                 
-                if (lines.length === 0) throw new Error("CSV ist leer");
+                if (allRows.length === 0) throw new Error("Die Datei ist leer.");
 
-                const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
-                
+                const header = allRows[0].map(h => h.toLowerCase());
                 const colIdx = {
                     date: header.indexOf('date'),
                     name: header.indexOf('name'),
@@ -180,10 +184,7 @@
                 };
                 if (colIdx.watched === -1) colIdx.watched = header.indexOf('watched');
 
-                const rows = lines.slice(1);
-
-                movies = rows.map(row => {
-                    const cols = parseCSVLine(row);
+                movies = allRows.slice(1).map(cols => {
                     return {
                         date: colIdx.date !== -1 ? cols[colIdx.date] || '' : '',
                         name: colIdx.name !== -1 ? cols[colIdx.name] || '' : '',
@@ -196,7 +197,7 @@
                 
                 applyFilters();
             } catch (e) {
-                document.getElementById('movie-list').innerHTML = "Fehler beim Laden der Datei: " + e.message;
+                document.getElementById('movie-list').innerHTML = "Fehler: " + e.message;
             }
         }
 
@@ -210,20 +211,19 @@
             const sortVal = document.getElementById('sort-by').value;
 
             let filtered = movies.filter(m => {
-                const matchesName = !fName || m.name.toLowerCase().includes(fName);
-                const matchesYear = !fYear || m.year === fYear;
+                const matchesName = !fName || (m.name && m.name.toLowerCase().includes(fName));
+                const matchesYear = !fYear || (m.year && m.year === fYear);
                 const matchesRating = fRating === "" || m.rating >= parseFloat(fRating);
-                const matchesTags = !fTags || m.tags.toLowerCase().includes(fTags);
-                const matchesDate = !fDate || m.date >= fDate;
-                const matchesWatched = !fWatched || m.watchedDate >= fWatched;
-
+                const matchesTags = !fTags || (m.tags && m.tags.toLowerCase().includes(fTags));
+                const matchesDate = !fDate || (m.date && m.date >= fDate);
+                const matchesWatched = !fWatched || (m.watchedDate && m.watchedDate >= fWatched);
                 return matchesName && matchesYear && matchesRating && matchesTags && matchesDate && matchesWatched;
             });
 
             const [key, dir] = sortVal.split('-');
             filtered.sort((a, b) => {
-                let valA = a[key.toLowerCase() === 'date' ? 'date' : key.toLowerCase()];
-                let valB = b[key.toLowerCase() === 'date' ? 'date' : key.toLowerCase()];
+                let valA = a[key.toLowerCase() === 'date' ? 'date' : key.toLowerCase()] || '';
+                let valB = b[key.toLowerCase() === 'date' ? 'date' : key.toLowerCase()] || '';
                 if (dir === 'asc') return valA > valB ? 1 : -1;
                 return valA < valB ? 1 : -1;
             });
