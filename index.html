@@ -106,7 +106,7 @@
             <input type="text" id="filter-year" placeholder="z.B. 1984" oninput="applyFilters()">
         </div>
         <div class="filter-group">
-            <label>Rating (Mindestwert)</label>
+            <label>Rating (Min)</label>
             <input type="number" id="filter-rating" step="0.5" placeholder="0.0" oninput="applyFilters()">
         </div>
         <div class="filter-group">
@@ -143,24 +143,44 @@
             try {
                 const response = await fetch('diary.csv');
                 const data = await response.text();
-                const rows = data.split(/\r?\n/).slice(1);
+                const lines = data.split(/\r?\n/).filter(l => l.trim() !== '');
+                
+                if (lines.length === 0) throw new Error("CSV ist leer");
 
-                movies = rows.filter(row => row.trim() !== '').map(row => {
-                    // Wir trennen die Spalten. Falls Letterboxd Anführungszeichen nutzt, entfernen wir diese.
+                // SCHRITT 1: Die Kopfzeile analysieren
+                const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+                
+                // Wir suchen, in welcher Spalte was steht
+                const colIdx = {
+                    date: header.indexOf('date'),
+                    name: header.indexOf('name'),
+                    year: header.indexOf('year'),
+                    rating: header.indexOf('rating'),
+                    tags: header.indexOf('tags'),
+                    watched: header.indexOf('watched date')
+                };
+
+                // Falls "Watched Date" nicht gefunden wurde, probieren wir nur "watched"
+                if (colIdx.watched === -1) colIdx.watched = header.indexOf('watched');
+
+                const rows = lines.slice(1);
+
+                movies = rows.map(row => {
                     const cols = row.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
                     
                     return {
-                        date: cols[0] || '',
-                        name: cols[1] || '',
-                        year: cols[2] || '',
-                        rating: cols[4] ? parseFloat(cols[4].replace(',', '.')) || 0 : 0,
-                        tags: cols[6] || '',
-                        watchedDate: cols[7] || ''
+                        date: colIdx.date !== -1 ? cols[colIdx.date] || '' : '',
+                        name: colIdx.name !== -1 ? cols[colIdx.name] || '' : '',
+                        year: colIdx.year !== -1 ? cols[colIdx.year] || '' : '',
+                        rating: colIdx.rating !== -1 ? parseFloat(cols[colIdx.rating].replace(',', '.')) || 0 : 0,
+                        tags: colIdx.tags !== -1 ? cols[colIdx.tags] || '' : '',
+                        watchedDate: colIdx.watched !== -1 ? cols[colIdx.watched] || '' : ''
                     };
                 });
+                
                 applyFilters();
             } catch (e) {
-                document.getElementById('movie-list').innerHTML = "Fehler beim Laden der diary.csv.";
+                document.getElementById('movie-list').innerHTML = "Fehler beim Laden der Datei: " + e.message;
             }
         }
 
