@@ -106,7 +106,7 @@
             <input type="text" id="filter-year" placeholder="z.B. 1984" oninput="applyFilters()">
         </div>
         <div class="filter-group">
-            <label>Rating (Min)</label>
+            <label>Rating (Mindestwert)</label>
             <input type="number" id="filter-rating" step="0.5" placeholder="0.0" oninput="applyFilters()">
         </div>
         <div class="filter-group">
@@ -139,59 +139,41 @@
     <script>
         let movies = [];
 
-        function parseCSV(text) {
-            const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-            if (lines.length === 0) return [];
-
-            const rows = [];
-            for (let line of lines) {
-                const cols = [];
-                let current = '';
-                let inQuotes = false;
-                for (let i = 0; i < line.length; i++) {
-                    const char = line[i];
-                    if (char === '"') {
-                        inQuotes = !inQuotes;
-                    } else if (char === ',' && !inQuotes) {
-                        cols.push(current.trim());
-                        current = '';
-                    } else {
-                        current += char;
-                    }
+        function parseCSVLine(text) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
                 }
-                cols.push(current.trim());
-                rows.push(cols);
             }
-            return rows;
+            result.push(current.trim());
+            return result;
         }
 
         async function loadCSV() {
             try {
                 const response = await fetch('diary.csv');
-                const text = await response.text();
-                const allRows = parseCSV(text);
+                const data = await response.text();
+                const lines = data.split(/\r?\n/).filter(l => l.trim() !== '');
                 
-                if (allRows.length === 0) throw new Error("Die Datei ist leer.");
-
-                const header = allRows[0].map(h => h.toLowerCase());
-                const colIdx = {
-                    date: header.indexOf('date'),
-                    name: header.indexOf('name'),
-                    year: header.indexOf('year'),
-                    rating: header.indexOf('rating'),
-                    tags: header.indexOf('tags'),
-                    watched: header.indexOf('watched date')
-                };
-                if (colIdx.watched === -1) colIdx.watched = header.indexOf('watched');
-
-                movies = allRows.slice(1).map(cols => {
+                // WICHTIG: Wir löschen KEINE Kopfzeile mehr, da deine Datei direkt mit Filmen beginnt.
+                movies = lines.map(row => {
+                    const cols = parseCSVLine(row);
                     return {
-                        date: colIdx.date !== -1 ? cols[colIdx.date] || '' : '',
-                        name: colIdx.name !== -1 ? cols[colIdx.name] || '' : '',
-                        year: colIdx.year !== -1 ? cols[colIdx.year] || '' : '',
-                        rating: colIdx.rating !== -1 ? parseFloat(cols[colIdx.rating].replace(',', '.')) || 0 : 0,
-                        tags: colIdx.tags !== -1 ? cols[colIdx.tags] || '' : '',
-                        watchedDate: colIdx.watched !== -1 ? cols[colIdx.watched] || '' : ''
+                        date: cols[0] || '',
+                        name: cols[1] || '',
+                        year: cols[2] || '',
+                        rating: cols[4] ? parseFloat(cols[4].replace(',', '.')) || 0 : 0,
+                        tags: cols[6] || '',
+                        watchedDate: cols[7] || ''
                     };
                 });
                 
