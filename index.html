@@ -139,6 +139,27 @@
     <script>
         let movies = [];
 
+        // Diese Funktion liest CSV-Dateien korrekt aus, auch wenn Kommas in Anführungszeichen stehen
+        function parseCSVLine(text) {
+            const result = [];
+            let curVal = "";
+            let inQuotes = false;
+
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(curVal.trim());
+                    curVal = "";
+                } else {
+                    curVal += char;
+                }
+            }
+            result.push(curVal.trim());
+            return result;
+        }
+
         async function loadCSV() {
             try {
                 const response = await fetch('diary.csv');
@@ -147,10 +168,8 @@
                 
                 if (lines.length === 0) throw new Error("CSV ist leer");
 
-                // SCHRITT 1: Die Kopfzeile analysieren
                 const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
                 
-                // Wir suchen, in welcher Spalte was steht
                 const colIdx = {
                     date: header.indexOf('date'),
                     name: header.indexOf('name'),
@@ -159,15 +178,12 @@
                     tags: header.indexOf('tags'),
                     watched: header.indexOf('watched date')
                 };
-
-                // Falls "Watched Date" nicht gefunden wurde, probieren wir nur "watched"
                 if (colIdx.watched === -1) colIdx.watched = header.indexOf('watched');
 
                 const rows = lines.slice(1);
 
                 movies = rows.map(row => {
-                    const cols = row.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-                    
+                    const cols = parseCSVLine(row);
                     return {
                         date: colIdx.date !== -1 ? cols[colIdx.date] || '' : '',
                         name: colIdx.name !== -1 ? cols[colIdx.name] || '' : '',
